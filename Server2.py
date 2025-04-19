@@ -1,36 +1,38 @@
 import socket
 from datetime import datetime
 import threading
-
+import time
 
 HOST = '127.0.0.1'
 PORT = 65432
-semaphore = threading.Semaphore(5)  
+semaphore = threading.Semaphore(5)
 
 
 def lidar_com_cliente(conn, addr):
-    with semaphore:  
-        print(f"[ENTROU] {addr} | Pessoas na sala: {threading.active_count() - 1}")
-        with conn:
-            while True:
-                data = conn.recv(1024)
-                if not data:
-                    break
+    with conn:
+        while True:
+            data = conn.recv(1024)
+            if not data:
+                break
 
-                msg = data.decode().strip().lower()
+            msg = data.decode().strip().lower()
 
-                if msg == "entrar":
-                    resposta = "Entrou na sala"
-                elif msg == "sair":
-                    resposta = "Saiu da sala"
+            if msg == "entrar":
+                if not semaphore.acquire(blocking=False):
+                    resposta = "negado"
                     conn.sendall(resposta.encode())
-                    break  
+                    break
                 else:
-                    resposta = "Mensagem inválida"
+                    try:
+                        print(f"[ENTROU] {addr} | Pessoas na sala: {5 - semaphore._value}")
+                        resposta = "permitido"
+                        conn.sendall(resposta.encode())
 
-                conn.sendall(resposta.encode())
-
-        print(f"[SAIU] {addr} | Pessoas restantes: {threading.active_count() - 2}")
+                        data = conn.recv(1024) 
+                        print(f"[SAIU] {addr} | Pessoas restantes: {5 - (semaphore._value + 1)}")
+                    finally:
+                        semaphore.release()
+                        break
 
 
 def iniciar_servidor():
